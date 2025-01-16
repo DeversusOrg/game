@@ -3,42 +3,130 @@ using System.Threading;
 
 class DinoRunGame
 {
-    private const char Dino = '^';    // Dino representation
-    private const char Obstacle = '#'; // Obstacle representation
-    private const char EmptySpace = ' '; // Empty space
+    private const char Dino = '^';    
+    private const char EmptySpace = ' '; 
 
-    private static int dinoX = 5;    // Dino's X position
-    private static int dinoY = 10;   // Dino's Y position (ground level)
-    private static int obstacleX = 50; // Obstacle's starting X position
-    private static int obstacleY = 10; // Obstacle's Y position (ground level)
+    private static int dinoX = 5;    
+    private static int dinoY = 10;   
     private static bool isJumping = false;
-    private static int jumpHeight = 4; // How high the dino can jump
+    private static bool isDoubleJumping = false;
+    private static int jumpHeight = 5;
     private static int currentJumpHeight = 0;
     private static bool gameOver = false;
+    private static DateTime lastDoubleJumpTime = DateTime.MinValue;
+    private static DateTime doubleJumpStartTime = DateTime.MinValue;
+    private static readonly TimeSpan doubleJumpCooldown = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan maxDoubleJumpDuration = TimeSpan.FromSeconds(3);
+    private static bool canDoubleJump = true;
+    private static Random random = new Random();
+    private static List<Obstacle> obstacles = new List<Obstacle>();
+    private static int currentScore = 0;
+    private static int highScore = 0;
+
+    private class Obstacle
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public char Type { get; set; }
+        public bool MovesVertically { get; set; }
+        public int VerticalDirection { get; set; } = 1;
+        public bool Passed { get; set; } = false;
+    }
 
     static void Main(string[] args)
     {
         Console.CursorVisible = false;
-        Console.SetWindowSize(80, 20); // Set a fixed window size for the console game
-        Console.SetBufferSize(80, 20); // Ensure the buffer is the same size
-
-        while (!gameOver)
+        Console.SetWindowSize(80, 20);
+        Console.SetBufferSize(80, 20);
+        
+        while (true)
         {
-            Update();
-            Draw();
-            Input();
-            Thread.Sleep(100); // Slow down the game loop for a smooth experience
-        }
+            InitializeObstacles();
+            gameOver = false;
+            currentScore = 0;
 
-        Console.Clear();
-        Console.SetCursorPosition(0, 0);
-        Console.WriteLine("Game Over! Press any key to exit.");
-        Console.ReadKey();
+            while (!gameOver)
+            {
+                Update();
+                Draw();
+                Input();
+                Thread.Sleep(100);
+            }
+        }
     }
+
+    static void InitializeObstacles()
+    {
+        obstacles.Clear();
+        int pattern = random.Next(8);
+        switch (pattern)
+        {
+            case 0:
+                obstacles.Add(new Obstacle { X = 50, Y = 10, Type = '#' });
+                obstacles.Add(new Obstacle { X = 65, Y = 10, Type = '#' });
+                obstacles.Add(new Obstacle { X = 80, Y = 8, Type = '|', MovesVertically = true });
+                break;
+            case 1:
+                obstacles.Add(new Obstacle { X = 40, Y = 10, Type = '#' });
+                obstacles.Add(new Obstacle { X = 60, Y = 8, Type = '|', MovesVertically = true });
+                obstacles.Add(new Obstacle { X = 80, Y = 8, Type = '|', MovesVertically = true });
+                break;
+            case 2:
+                obstacles.Add(new Obstacle { X = 50, Y = 5, Type = '*' });
+                obstacles.Add(new Obstacle { X = 65, Y = 10, Type = '#' });
+                obstacles.Add(new Obstacle { X = 80, Y = 5, Type = '*' });
+                break;
+            case 3:
+                obstacles.Add(new Obstacle { X = 40, Y = 7, Type = '|', MovesVertically = true });
+                obstacles.Add(new Obstacle { X = 60, Y = 9, Type = '|', MovesVertically = true });
+                obstacles.Add(new Obstacle { X = 80, Y = 11, Type = '|', MovesVertically = true });
+                break;
+            case 4:
+                obstacles.Add(new Obstacle { X = 50, Y = 5, Type = '*' });
+                obstacles.Add(new Obstacle { X = 60, Y = 10, Type = '#' });
+                obstacles.Add(new Obstacle { X = 70, Y = 5, Type = '*' });
+                obstacles.Add(new Obstacle { X = 80, Y = 10, Type = '#' });
+                break;
+            case 5:
+                obstacles.Add(new Obstacle { X = 40, Y = 5, Type = '=', MovesVertically = true });
+                obstacles.Add(new Obstacle { X = 60, Y = 5, Type = '=', MovesVertically = true });
+                obstacles.Add(new Obstacle { X = 80, Y = 5, Type = '=', MovesVertically = true });
+                break;
+            case 6:
+                obstacles.Add(new Obstacle { X = 45, Y = 5, Type = '*' });
+                obstacles.Add(new Obstacle { X = 55, Y = 7, Type = '|', MovesVertically = true });
+                obstacles.Add(new Obstacle { X = 75, Y = 8, Type = '|', MovesVertically = true });
+                break;
+            case 7:
+                for (int i = 0; i < 5; i++)
+                {
+                    obstacles.Add(new Obstacle 
+                    { 
+                        X = 40 + (i * 20), 
+                        Y = 7, 
+                        Type = '~', 
+                        MovesVertically = true,
+                        VerticalDirection = i % 2 == 0 ? 1 : -1
+                    });
+                }
+                break;
+        }
+    }
+
+
 
     static void Update()
     {
-        if (isJumping)
+        if (isDoubleJumping)
+        {
+            if ((DateTime.Now - doubleJumpStartTime) >= maxDoubleJumpDuration)
+            {
+                isDoubleJumping = false;
+                isJumping = false;
+            }
+        }
+        
+        if (isJumping || isDoubleJumping)
         {
             if (currentJumpHeight < jumpHeight)
             {
@@ -47,30 +135,59 @@ class DinoRunGame
             }
             else
             {
-                isJumping = false;
+                if (!isDoubleJumping)
+                {
+                    isJumping = false;
+                }
             }
         }
-        else
+        else if (currentJumpHeight > 0)
         {
-            if (currentJumpHeight > 0)
+            currentJumpHeight--;
+            dinoY++;
+        }
+
+        canDoubleJump = (DateTime.Now - lastDoubleJumpTime) >= doubleJumpCooldown;
+
+        foreach (var obstacle in obstacles)
+        {
+            obstacle.X--;
+            
+            if (obstacle.MovesVertically)
             {
-                currentJumpHeight--;
-                dinoY++;
+                obstacle.Y += obstacle.VerticalDirection;
+                if (obstacle.Y <= 5 || obstacle.Y >= 15)
+                {
+                    obstacle.VerticalDirection *= -1;
+                }
             }
-        }
 
-        // Move the obstacle leftwards
-        obstacleX--;
+            if (obstacle.X == dinoX - 1 && !obstacle.Passed)
+            {
+                obstacle.Passed = true;
+                currentScore++;
+                if (currentScore > highScore)
+                {
+                    highScore = currentScore;
+                }
+            }
 
-        if (obstacleX < 0)
-        {
-            obstacleX = 79; // Reset obstacle to the far right
-        }
+            if (obstacle.X < 0)
+            {
+                obstacle.X = 79;
+                obstacle.Passed = false;
+                if (obstacle.MovesVertically)
+                {
+                    obstacle.Y = random.Next(5, 15);
+                }
+            }
 
-        // Check for collision
-        if (dinoX == obstacleX && dinoY == obstacleY)
-        {
-            gameOver = true;
+            if (dinoX == obstacle.X && dinoY == obstacle.Y)
+            {
+                gameOver = true;
+                ShowEndGameMenu();
+                return;
+            }
         }
     }
 
@@ -78,7 +195,9 @@ class DinoRunGame
     {
         Console.Clear();
 
-        // Draw the Dino and Obstacle
+        Console.SetCursorPosition(60, 0);
+        Console.Write($"Score: {currentScore} | High Score: {highScore}");
+
         for (int y = 0; y < 20; y++)
         {
             for (int x = 0; x < 80; x++)
@@ -87,13 +206,17 @@ class DinoRunGame
                 {
                     Console.Write(Dino);
                 }
-                else if (x == obstacleX && y == obstacleY)
-                {
-                    Console.Write(Obstacle);
-                }
                 else
                 {
-                    Console.Write(EmptySpace);
+                    var obstacle = obstacles.FirstOrDefault(o => o.X == x && o.Y == y);
+                    if (obstacle != null)
+                    {
+                        Console.Write(obstacle.Type);
+                    }
+                    else
+                    {
+                        Console.Write(EmptySpace);
+                    }
                 }
             }
             Console.WriteLine();
@@ -106,11 +229,61 @@ class DinoRunGame
         {
             var key = Console.ReadKey(intercept: true).Key;
 
-            // Jump when the space bar is pressed
-            if (key == ConsoleKey.Spacebar && !isJumping)
+            if (key == ConsoleKey.Spacebar)
             {
-                isJumping = true;
+                if (!isJumping)
+                {
+                    isJumping = true;
+                }
+                else if (canDoubleJump && !isDoubleJumping)
+                {
+                    isDoubleJumping = true;
+                    doubleJumpStartTime = DateTime.Now;
+                    lastDoubleJumpTime = DateTime.Now;
+                }
             }
         }
+    }
+
+    static void ShowEndGameMenu()
+    {
+        Console.Clear();
+        Console.SetCursorPosition(30, 8);
+        Console.WriteLine("Game Over!");
+        Console.SetCursorPosition(25, 9);
+        Console.WriteLine($"Final Score: {currentScore}");
+        Console.SetCursorPosition(25, 10);
+        Console.WriteLine($"High Score: {highScore}");
+        Console.SetCursorPosition(25, 12);
+        Console.WriteLine("Press 'R' to restart");
+        Console.SetCursorPosition(25, 13);
+        Console.WriteLine("Press 'Q' to quit");
+        
+        while (true)
+        {
+            var key = Console.ReadKey(true).Key;
+            if (key == ConsoleKey.R)
+            {
+                ResetGame();
+                return;
+            }
+            else if (key == ConsoleKey.Q)
+            {
+                Environment.Exit(0);
+            }
+        }
+    }
+
+    static void ResetGame()
+    {
+        dinoX = 5;
+        dinoY = 10;
+        isJumping = false;
+        isDoubleJumping = false;
+        currentJumpHeight = 0;
+        lastDoubleJumpTime = DateTime.MinValue;
+        doubleJumpStartTime = DateTime.MinValue;
+        canDoubleJump = true;
+        
     }
 }
